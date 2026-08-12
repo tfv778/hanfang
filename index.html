@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>汉方医案检索</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>方</text></svg>">
+<style>
+  :root{
+    --bg:#faf8f5; --panel:#fff; --ink:#23201c; --dim:#8a8178; --line:#e6e0d8;
+    --accent:#7a4a2b; --accent-soft:#f2e9e1; --warn:#a8641a; --warn-bg:#fdf4e6;
+    --gold:#8a6d1f; --hit:#fff2c2;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:15px/1.7 "Noto Serif CJK SC","Songti SC","Source Han Serif SC",Georgia,serif}
+  header{background:var(--panel);border-bottom:1px solid var(--line);
+         padding:14px 22px;position:sticky;top:0;z-index:20}
+  h1{margin:0 0 2px;font-size:19px;letter-spacing:.06em;font-weight:600}
+  .sub{color:var(--dim);font-size:12px}
+  .wrap{max-width:1120px;margin:0 auto;padding:0 22px}
+  form{display:flex;gap:8px;margin-top:11px;flex-wrap:wrap;align-items:center}
+  input[type=text],select{font:inherit;font-size:14px;padding:8px 11px;
+       border:1px solid var(--line);border-radius:5px;background:#fff;color:var(--ink)}
+  #q{flex:1;min-width:260px}
+  button{font:inherit;font-size:14px;padding:8px 15px;border:1px solid var(--accent);
+       background:var(--accent);color:#fff;border-radius:5px;cursor:pointer}
+  button.ghost{background:#fff;color:var(--accent)}
+  button:hover{opacity:.88}
+  main{padding:22px 0 70px}
+  .hint{color:var(--dim);font-size:12.5px;margin:6px 0 0}
+  .hint code{background:var(--accent-soft);padding:1px 5px;border-radius:3px;
+       font-family:ui-monospace,Menlo,monospace;font-size:12px;cursor:pointer}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:7px;
+       padding:16px 18px;margin-bottom:16px}
+  h2{margin:0 0 3px;font-size:15px;font-weight:600}
+  .note{color:var(--dim);font-size:12px;margin:0 0 12px}
+  table{border-collapse:collapse;width:100%;font-size:14px}
+  th{text-align:left;font-weight:600;color:var(--dim);font-size:11.5px;
+     letter-spacing:.09em;border-bottom:1px solid var(--line);padding:5px 8px}
+  td{padding:6px 8px;border-bottom:1px solid #f2ede6}
+  tr.f{cursor:pointer}
+  tr.f:hover{background:var(--accent-soft)}
+  tr.f.on{background:var(--accent-soft);box-shadow:inset 3px 0 0 var(--accent)}
+  .num{text-align:right;font-variant-numeric:tabular-nums;
+       font-family:ui-monospace,Menlo,monospace;font-size:13px}
+  .bar{height:5px;background:var(--accent);border-radius:3px;display:inline-block;
+       vertical-align:middle}
+  .tier{font-size:10.5px;color:var(--gold);border:1px solid #ddd0a8;
+        background:#fdfaf0;border-radius:9px;padding:1px 7px}
+  .case{border-top:1px solid #f2ede6;padding:13px 0}
+  .case:first-child{border-top:0}
+  .cid{font-family:ui-monospace,Menlo,monospace;font-size:12px;color:var(--accent);
+       cursor:pointer;text-decoration:underline dotted}
+  .ctitle{font-weight:600}
+  .meta{color:var(--dim);font-size:12px;margin:2px 0 5px}
+  .snip{font-size:14px}
+  mark{background:var(--hit);padding:0 1px;border-radius:2px}
+  .fx{display:inline-block;font-size:11.5px;background:var(--accent-soft);
+      color:var(--accent);border-radius:9px;padding:1px 8px;margin:2px 4px 0 0;cursor:pointer}
+  .warn{display:inline-block;font-size:11px;background:var(--warn-bg);color:var(--warn);
+        border:1px solid #f0dcc0;border-radius:9px;padding:1px 7px;margin-left:6px}
+  .banner{background:var(--warn-bg);border:1px solid #f0dcc0;color:var(--warn);
+          border-radius:5px;padding:9px 12px;font-size:12.5px;margin-bottom:12px}
+  #modal{position:fixed;inset:0;background:rgba(30,25,20,.5);display:none;z-index:50;
+         overflow:auto;padding:34px 16px}
+  #box{max-width:860px;margin:0 auto;background:var(--panel);border-radius:8px;
+       padding:24px 28px 30px}
+  #box pre{white-space:pre-wrap;font:inherit;margin:0}
+  .close{float:right;border:0;background:none;color:var(--dim);font-size:24px;
+         cursor:pointer;padding:0 4px;line-height:1}
+  .kv{font-size:12.5px;color:var(--dim);margin:3px 0}
+  .visit{border-left:2px solid var(--accent-soft);padding:2px 0 2px 13px;margin:13px 0}
+  .vlabel{font-size:11.5px;color:var(--accent);letter-spacing:.06em}
+  .empty{color:var(--dim);font-size:14px;padding:8px 0}
+  .spin{color:var(--dim);font-size:13px}
+  .row2{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px}
+  label.f{font-size:12px;color:var(--dim)}
+  nav{display:flex;gap:2px;margin-top:11px}
+  nav button{background:none;border:0;border-bottom:2px solid transparent;color:var(--dim);
+       border-radius:0;padding:6px 13px;font-size:14px}
+  nav button.on{color:var(--accent);border-bottom-color:var(--accent);font-weight:600}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+  @media(max-width:760px){.grid2{grid-template-columns:1fr}}
+  .fbar{display:flex;align-items:center;gap:8px;margin:3px 0}
+  .fbar .nm{min-width:84px;font-size:13.5px}
+  .fbar .tr{flex:1;background:#f2ede6;border-radius:3px;height:9px;overflow:hidden}
+  .fbar .fl{display:block;height:100%;background:var(--accent);border-radius:3px}
+  .fbar .pc{font-size:12px;color:var(--dim);font-family:ui-monospace,Menlo,monospace;
+       min-width:62px;text-align:right}
+  .pill{display:inline-block;font-size:12px;background:var(--accent-soft);color:var(--accent);
+       border-radius:9px;padding:2px 9px;margin:3px 4px 0 0}
+  h3{font-size:13px;font-weight:600;margin:18px 0 6px;letter-spacing:.04em}
+  h3 .q{font-weight:400;color:var(--dim);font-size:11.5px;letter-spacing:0}
+  .src{font-size:12px;color:var(--dim);margin:2px 0 9px 0}
+  .dual{display:flex;align-items:center;gap:7px;margin:3px 0;font-size:13px}
+  .dual .nm{flex:1}
+  .dual .ba{width:82px;text-align:right}
+  .dual .bb{width:82px}
+  .dual i{display:inline-block;height:9px;background:var(--accent);border-radius:2px;
+       vertical-align:middle}
+  .dual .bb i{background:#3f6f8a}
+  .dual .n{font-size:11px;color:var(--dim);font-family:ui-monospace,Menlo,monospace}
+  .lg{font-size:12px;color:var(--dim);margin-bottom:10px}
+  .lg s{display:inline-block;width:9px;height:9px;border-radius:2px;
+       vertical-align:middle;margin:0 3px 0 10px}
+</style>
+</head>
+<body>
+<header><div class="wrap">
+  <h1>汉方医案检索</h1>
+  <div class="sub" id="stat">加载中…</div>
+  <div class="sub" style="margin-top:4px">
+    API: <input type="text" id="api-url" placeholder="http://127.0.0.1:8770" style="font-size:10px;padding:2px 5px;width:150px">
+    <button onclick="updateApiBase()" style="font-size:10px;padding:2px 8px;border:1px solid var(--line);background:var(--bg);color:var(--ink)">切换</button>
+  </div>
+
+  <nav>
+    <button class="on" data-tab="search">检索</button>
+    <button data-tab="formula">方剂档案</button>
+    <button data-tab="herb">药物</button>
+    <button data-tab="diff">鉴别</button>
+  </nav>
+
+  <div id="hd-search">
+    <form id="form" autocomplete="off">
+      <input type="text" id="q" placeholder="输入症状／体征，空格分隔　例：心下痞 肠鸣 下利">
+      <button type="submit">检索</button>
+      <button type="button" class="ghost" id="clear">清除</button>
+    </form>
+    <div class="row2">
+      <label class="f">方剂 <input type="text" id="ff" size="12" list="dl-f" placeholder="全部"></label>
+      <label class="f">药物 <input type="text" id="fh" size="9" list="dl-h" placeholder="全部"></label>
+      <label class="f">书目 <input type="text" id="fb" size="12" list="dl-b" placeholder="全部"></label>
+      <label class="f">摘要层
+        <select id="fd">
+          <option value="include">并入</option>
+          <option value="exclude">排除</option>
+          <option value="only">仅摘要</option>
+        </select></label>
+    </div>
+    <p class="hint">试试：
+      <code>心下痞 肠鸣 下利</code>
+      <code>往来寒热 胸胁苦满 口苦</code>
+      <code>眩晕 心悸 小便不利</code>
+      <code>手足厥冷 下利清谷</code></p>
+  </div>
+
+  <div id="hd-formula" hidden>
+    <form id="fform" autocomplete="off">
+      <input type="text" id="fname" list="dl-f" placeholder="方剂名　例：半夏泻心汤">
+      <button type="submit">查看</button>
+    </form>
+    <p class="hint">试试：
+      <code data-f>半夏泻心汤</code><code data-f>小柴胡汤</code>
+      <code data-f>真武汤</code><code data-f>桂枝汤</code></p>
+  </div>
+
+  <div id="hd-herb" hidden>
+    <form id="hform" autocomplete="off">
+      <input type="text" id="hname" list="dl-h" placeholder="药物名　例：五味子">
+      <input type="text" id="hq" placeholder="并可加症状缩小范围（可空）">
+      <select id="hm">
+        <option value="all">全部医案</option>
+        <option value="prescribed">仅有用量</option>
+        <option value="mentioned">仅正文提及</option>
+      </select>
+      <button type="submit">查看</button>
+    </form>
+    <p class="hint">试试：
+      <code data-h>五味子</code><code data-h>细辛</code>
+      <code data-h>附子</code><code data-h>石膏</code><code data-h>吴茱萸</code></p>
+  </div>
+
+  <div id="hd-diff" hidden>
+    <form id="dform" autocomplete="off">
+      <input type="text" id="da" list="dl-f" placeholder="方剂 A">
+      <input type="text" id="db" list="dl-f" placeholder="方剂 B">
+      <button type="submit">比较</button>
+    </form>
+    <p class="hint">试试：
+      <code data-d="半夏泻心汤|生姜泻心汤">半夏泻心汤 ／ 生姜泻心汤</code>
+      <code data-d="真武汤|苓桂术甘汤">真武汤 ／ 苓桂术甘汤</code>
+      <code data-d="小柴胡汤|大柴胡汤">小柴胡汤 ／ 大柴胡汤</code></p>
+  </div>
+</div></header>
+
+<datalist id="dl-f"></datalist>
+<datalist id="dl-h"></datalist>
+<datalist id="dl-b"></datalist>
+
+<main class="wrap">
+  <div id="pane-search">
+    <section id="cands" hidden>
+      <h2>候选方 · 按医案证据量排序</h2>
+      <p class="note">这是语料统计，不是方证匹配度（设计文档 §9.1）。点击方剂查看其医案。</p>
+      <div id="ctab"></div>
+    </section>
+    <section id="res">
+      <h2 id="restitle">医案</h2>
+      <p class="note" id="resnote">输入症状开始检索。</p>
+      <div id="list"></div>
+    </section>
+  </div>
+
+  <div id="pane-formula" hidden>
+    <section id="fout"><p class="note">输入方剂名查看其语料档案。</p></section>
+  </div>
+
+  <div id="pane-herb" hidden>
+    <section id="hout"><p class="note">输入药物名查看其语料档案与医案。</p></section>
+  </div>
+
+  <div id="pane-diff" hidden>
+    <section id="dout"><p class="note">输入两个方剂名进行比较。</p></section>
+  </div>
+</main>
+
+<div id="modal"><div id="box">
+  <button class="close" onclick="closeBox()">×</button>
+  <div id="boxc"></div>
+</div></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => (s||"").replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let TERMS = [], ACTIVE = null;
+let API_BASE = location.origin;
+
+const hl = t => esc(t).replace(/《([^》]{1,12})》/g, (m,w) =>
+  TERMS.includes(w) ? `<mark>${w}</mark>` : m);
+
+async function api(p, q){
+  const u = new URL(p, API_BASE);
+  Object.entries(q||{}).forEach(([k,v]) => v && u.searchParams.set(k,v));
+  const r = await fetch(u); return r.json();
+}
+
+function updateApiBase() {
+  const val = $('#api-url').value.trim();
+  if (val) {
+    API_BASE = val.endsWith('/') ? val.slice(0, -1) : val;
+    localStorage.setItem('hanfang_api_base', API_BASE);
+    location.reload();
+  }
+}
+
+const savedBase = localStorage.getItem('hanfang_api_base');
+if (savedBase) API_BASE = savedBase;
+
+api('/api/stats').then(s => {
+  $('#stat').textContent =
+    `${s.cases} 医案 · ${s.visits} 诊次 · ${s.formulas_with_cases} 方剂 · ${s.books} 种书刊`;
+});
+
+// ---- autocomplete sources -------------------------------------------------
+const fill = (el, rows) => el.innerHTML = rows.map(r =>
+  `<option value="${esc(r.name)}">${r.n} 案</option>`).join('');
+// formulas also get an entry per alias -- 苓桂术甘汤 is typed far more often than
+// the canonical 茯苓桂枝白术甘草汤, and the server resolves either.
+api('/api/formulas').then(rows => $('#dl-f').innerHTML = rows.flatMap(r =>
+  [`<option value="${esc(r.name)}">${r.n} 案</option>`].concat(
+    (r.aliases||[]).map(a =>
+      `<option value="${esc(a)}">${r.n} 案 · 即 ${esc(r.name)}</option>`))).join(''));
+api('/api/herbs').then(r => fill($('#dl-h'), r));
+api('/api/books').then(r => fill($('#dl-b'), r));
+
+// ---- tabs -----------------------------------------------------------------
+const TABS = ['search','formula','herb','diff'];
+function tab(name){
+  TABS.forEach(t => {
+    $('#pane-'+t).hidden = t !== name;
+    $('#hd-'+t).hidden   = t !== name;
+  });
+  document.querySelectorAll('nav button').forEach(b =>
+    b.classList.toggle('on', b.dataset.tab === name));
+}
+document.querySelectorAll('nav button').forEach(b =>
+  b.onclick = () => tab(b.dataset.tab));
+
+function filters(){
+  return {formula: $('#ff').value.trim(), herb: $('#fh').value.trim(),
+          book: $('#fb').value.trim(), derived: $('#fd').value};
+}
+
+$('#form').onsubmit = e => { e.preventDefault(); ACTIVE = null; run(); };
+$('#clear').onclick = () => {
+  $('#q').value=''; $('#ff').value=''; $('#fh').value=''; $('#fb').value='';
+  $('#fd').value='include'; ACTIVE=null; $('#cands').hidden=true;
+  $('#list').innerHTML=''; $('#resnote').textContent='输入症状开始检索。';
+};
+document.querySelectorAll('.hint code').forEach(c =>
+  c.onclick = () => { $('#q').value = c.textContent; ACTIVE=null; run(); });
+
+async function run(){
+  const q = $('#q').value.trim(), f = filters();
+  $('#resnote').innerHTML = '<span class="spin">检索中…</span>';
+  TERMS = q.split(/[\s,，、;；]+/).filter(Boolean);
+
+  if (q && !f.formula){
+    const d = await api('/api/find', {q, top: 10});
+    renderCands(d.candidates);
+  } else { $('#cands').hidden = true; }
+
+  const hits = await api('/api/cases',
+      {q, limit: 25, formula: ACTIVE || f.formula, herb: f.herb,
+       book: f.book, derived: f.derived});
+  renderCases(hits);
+}
+
+function renderCands(cs){
+  const s = $('#cands');
+  if (!cs || !cs.length){ s.hidden = true; return; }
+  s.hidden = false;
+  const max = Math.max(...cs.map(c => c.support));
+  const anyDer = cs.some(c => c.matched_derived > 0);
+  s.querySelector('#ctab').innerHTML = `<table>
+    <tr><th>方剂</th><th class="num">命中/总案</th><th class="num">占比</th>
+        <th>支持度</th><th class="num">摘要</th><th></th><th></th></tr>
+    ${cs.map(c => `<tr class="f ${ACTIVE===c.formula?'on':''}" data-f="${esc(c.formula)}">
+      <td><b>${esc(c.formula)}</b></td>
+      <td class="num">${c.matched_cases}/${c.total_cases}</td>
+      <td class="num">${Math.round(c.share*100)}%</td>
+      <td><span class="bar" style="width:${Math.max(4,110*c.support/max)}px"></span>
+          <span class="num" style="color:var(--dim)"> ${c.support.toFixed(1)}</span></td>
+      <td class="num" style="color:var(--dim)">${c.matched_derived||''}</td>
+      <td>${c.gold_tier ? `<span class="tier">${c.gold_tier.replace('_',' ')}</span>` : ''}</td>
+      <td class="num"><span class="fx" data-prof="${esc(c.formula)}">档案</span></td>
+    </tr>`).join('')}</table>
+    ${anyDer ? `<p class="note" style="margin-top:10px">摘要 = 来自《漢方の臨床》中文摘要（派生资料）。
+       支持度仅按原始医案计算。</p>` : ''}`;
+  s.querySelectorAll('tr.f').forEach(tr => tr.onclick = () => {
+    ACTIVE = (ACTIVE === tr.dataset.f) ? null : tr.dataset.f; run();
+  });
+  s.querySelectorAll('[data-prof]').forEach(el => el.onclick = ev => {
+    ev.stopPropagation(); showFormula(el.dataset.prof);
+  });
+}
+
+function renderCases(hits){
+  $('#restitle').textContent = ACTIVE ? `医案 · ${ACTIVE}` : '医案';
+  $('#resnote').textContent = hits.length
+    ? `${hits.length} 条${ACTIVE ? '（已按方剂筛选，再次点击可取消）' : ''}`
+    : '无结果。';
+  $('#list').innerHTML = hits.map(h => {
+    const der = h.derivation !== 'ocr_source';
+    const pages = h.page_start + (h.page_end !== h.page_start ? '-' + h.page_end : '');
+    return `<div class="case">
+      <span class="cid" onclick="openCase('${h.case_id}')">${h.case_id}</span>
+      <span class="ctitle"> ${esc(h.title)}</span>
+      ${der ? '<span class="warn">摘要 · 译自日文</span>' : ''}
+      <div class="meta">${esc(h.book)} p${pages}
+        ${h.physician ? ' · ' + esc(h.physician) : ''}
+        ${h.citation ? ' · 出处《' + esc(h.citation) + '》' : ''}
+        ${h.orig_title ? ' · 原题《' + esc(h.orig_title) + '》' : ''}</div>
+      <div>${(h.formulas||[]).slice(0,8).map(f =>
+        `<span class="fx" onclick="pickFormula('${esc(f)}')">${esc(f)}</span>`).join('')}</div>
+      <div class="snip">${hl(h.snippet)}</div></div>`;
+  }).join('') || '<div class="empty">无结果。</div>';
+}
+
+function pickFormula(f){ tab('search'); ACTIVE = f; run();
+  window.scrollTo({top:0, behavior:'smooth'}); }
+
+async function openCase(id){
+  const d = await api('/api/case', {id});
+  const der = d.derivation && d.derivation !== 'ocr_source';
+  const pages = d.page_start + (d.page_end !== d.page_start ? '-' + d.page_end : '');
+  $('#boxc').innerHTML = `
+    <div style="font-size:12px;color:var(--dim);font-family:ui-monospace,monospace">${d.case_id}</div>
+    <h2 style="font-size:18px;margin:3px 0 8px">${esc(d.title)}</h2>
+    ${der ? `<div class="banner"><b>派生资料</b> — 日文原刊的中文摘要，经 OCR 与摘要两道加工，
+       不可作原文引用。核对：漢方の臨床….txt p${d.page_start}
+       ${d.orig_title ? '　原题《' + esc(d.orig_title) + '》' : ''}</div>` : ''}
+    <div class="kv">${esc(d.book)} p${pages} · 编者 ${esc(d.compiler||'')}
+      ${d.physician ? ' · 医家 ' + esc(d.physician) : ''}
+      ${d.citation ? ' · 出处《' + esc(d.citation) + '》' : ''}</div>
+    ${d.flags ? `<div class="kv">flags: ${esc(d.flags)}</div>` : ''}
+    ${d.formulas?.length ? `<div class="kv">方：${d.formulas.map(f =>
+        `<span class="fx" onclick="closeBox();pickFormula('${esc(f.name)}')">${esc(f.name)}</span>`
+      ).join('')}</div>` : ''}
+    ${d.herbs?.length ? `<div class="kv">药：${d.herbs.map(h =>
+        `<span class="fx" onclick="closeBox();showHerb('${esc(h.herb)}')"
+          >${esc(h.herb)}${esc(String(h.amount||''))}${esc(h.unit||'')}</span>`
+        + (h.herb !== h.surface ? `<span style="color:var(--warn)">[OCR:${esc(h.surface)}]</span>` : '')
+      ).join('')}</div>` : ''}
+    <div style="margin-top:16px">${
+      (d.visits||[]).map(v => `<div class="${d.visits.length>1?'visit':''}">
+        ${d.visits.length>1 ? `<div class="vlabel">${esc(v.label)}</div>` : ''}
+        <pre>${esc(v.text)}</pre></div>`).join('')
+      || `<pre>${esc(d.text)}</pre>`}</div>`;
+  $('#modal').style.display = 'block';
+  document.body.style.overflow = 'hidden';
+}
+// ---- 方剂档案 --------------------------------------------------------------
+$('#fform').onsubmit = e => { e.preventDefault(); showFormula($('#fname').value.trim()); };
+document.querySelectorAll('.hint code[data-f]').forEach(c =>
+  c.onclick = () => { $('#fname').value = c.textContent; showFormula(c.textContent); });
+
+async function showFormula(name){
+  if (!name) return;
+  tab('formula'); $('#fname').value = name;
+  $('#fout').innerHTML = '<p class="note">载入中…</p>';
+  const p = await api('/api/formula', {name});
+  if (!p || !p.formula){
+    $('#fout').innerHTML = `<p class="note">语料中没有「${esc(name)}」。请从输入框的候选列表中选择。</p>`;
+    return;
+  }
+  const n = p.n_cases || 1;
+  const bars = rows => rows.map(([k,c]) => `<div class="fbar">
+      <span class="nm">${esc(k)}</span>
+      <span class="tr"><span class="fl" style="width:${Math.round(100*c/n)}%"></span></span>
+      <span class="pc">${c}/${n} ${Math.round(100*c/n)}%</span></div>`).join('');
+
+  const bySrc = {};
+  (p.recorded_composition||[]).forEach(x => (bySrc[x.src] = bySrc[x.src]||[]).push(x));
+
+  $('#fout').innerHTML = `
+    <h2>${esc(p.formula)}
+      ${p.gold_tier ? `<span class="tier">${p.gold_tier.replace('_',' ')}</span>` : ''}</h2>
+    <p class="note">${esc(p.group||'')} ${esc(p.origin||'')} ·
+      共 <b>${p.n_cases}</b> 案 ·
+      ${Object.entries(p.books||{}).map(([b,c]) => esc(b)+'×'+c).join('、')}</p>
+
+    ${Object.keys(bySrc).length ? `<h3>记载组成
+      <span class="q">— 取自各书自带的方剂索引</span></h3>
+      ${Object.entries(bySrc).map(([src,items]) => `
+        <div>${items.map(x => `<span class="pill">${esc(x.herb)}${
+          x.amount!=null?esc(String(x.amount)):''}${esc(x.unit||'')}</span>`).join('')}</div>
+        <div class="src">— ${esc(src)}</div>`).join('')}` : ''}
+
+    <h3>医案中出现的药物 <span class="q">— 实际处方所载</span></h3>
+    <div>${(p.herbs_in_cases||[]).map(([h,c]) =>
+      `<span class="pill">${esc(h)} ×${c}</span>`).join('') || '<span class="note">无</span>'}</div>
+
+    <h3>医案中常见的可观察表现
+      <span class="q">— 候选特征（§A.11），<b>不是</b>经人工审定的方证卡</span></h3>
+    ${bars(p.frequent_observations||[]) || '<p class="note">无</p>'}
+
+    <h3>医案 <span class="q">— 最多列 50 条</span></h3>
+    <div>${(p.case_ids||[]).map(id =>
+      `<span class="fx" onclick="openCase('${id}')">${id}</span>`).join('')}</div>
+    <p class="note" style="margin-top:14px">
+      <button class="ghost" onclick="pickFormula('${esc(p.formula)}')">在检索页按此方筛选医案 →</button></p>`;
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
+// ---- 药物 ------------------------------------------------------------------
+$('#hform').onsubmit = e => {
+  e.preventDefault(); showHerb($('#hname').value.trim(), $('#hq').value.trim());
+};
+$('#hm').onchange = () => { if ($('#hname').value.trim())
+  showHerb($('#hname').value.trim(), $('#hq').value.trim()); };
+document.querySelectorAll('.hint code[data-h]').forEach(c =>
+  c.onclick = () => { $('#hname').value = c.textContent; $('#hq').value='';
+                      $('#hm').value='all'; showHerb(c.textContent); });
+
+async function showHerb(name, q){
+  if (!name) return;
+  tab('herb'); $('#hname').value = name;
+  $('#hout').innerHTML = '<p class="note">载入中…</p>';
+  const match = $('#hm').value;
+  const p = await api('/api/herb', {name, q, limit: 40, match});
+  if (!p || !p.herb){
+    $('#hout').innerHTML = `<p class="note">语料中没有「${esc(name)}」。</p>`;
+    return;
+  }
+  const renamed = p.herb !== p.query;
+  const dose = (p.dose_stats||[]).map(d =>
+    `<span class="pill">${esc(d.unit)}：中位 ${d.median} ・ ${d.min}–${d.max}（n=${d.n}）</span>`).join('');
+  const ocr = (p.surfaces||[]).filter(s => s !== p.herb);
+
+  $('#hout').innerHTML = `
+    <h2>${esc(p.herb)}</h2>
+    <p class="note">
+      共 <b>${p.n_cases}</b> 案 ——
+      <b>${p.n_dosed}</b> 案有可解析的用量，<b>${p.n_mentioned}</b> 案仅见于正文。
+      ${renamed ? `　（由「${esc(p.query)}」归一）` : ''}</p>
+    ${ocr.length ? `<p class="note">已并入 OCR 异写：${ocr.map(s =>
+      `<code style="background:var(--accent-soft);padding:1px 5px;border-radius:3px">${esc(s)}</code>`).join(' ')}</p>` : ''}
+
+    ${dose ? `<h3>用量 <span class="q">— 各书原载，跨年代与度量，非用药建议</span></h3><div>${dose}</div>` : ''}
+
+    <h3>常见于这些方 <span class="q">— 含此药医案所用之方</span></h3>
+    <div>${(p.formulas||[]).map(([f,c]) =>
+      `<span class="fx" onclick="showFormula('${esc(f)}')">${esc(f)} ×${c}</span>`).join('')
+      || '<span class="note">无</span>'}</div>
+
+    ${(p.partners||[]).length ? `<h3>常同用之药 <span class="q">— 仅按有用量的 ${p.n_dosed} 案统计</span></h3>
+      <div>${p.partners.map(([h,c]) =>
+        `<span class="fx" onclick="showHerb('${esc(h)}')">${esc(h)} ×${c}</span>`).join('')}</div>` : ''}
+
+    <h3>医案中常见的可观察表现 <span class="q">— 语料频次，非功效</span></h3>
+    ${(p.frequent_observations||[]).map(([k,c]) => `<div class="fbar">
+        <span class="nm">${esc(k)}</span>
+        <span class="tr"><span class="fl" style="width:${Math.round(100*c/p.n_cases)}%"></span></span>
+        <span class="pc">${c}/${p.n_cases} ${Math.round(100*c/p.n_cases)}%</span></div>`).join('')
+      || '<p class="note">无</p>'}
+
+    <h3>书目分布</h3>
+    <p class="note">${Object.entries(p.books||{}).map(([b,c]) => esc(b)+'×'+c).join('、')}</p>
+
+    <h3>医案 <span class="q">— ${
+      match==='prescribed' ? '仅列有用量者' :
+      match==='mentioned'  ? `仅列正文提及者（${p.n_mentioned} 案）` :
+      '有用量者在前'}${q ? '，已按症状筛选' : ''}，最多 40 条</span></h3>
+    <div id="hlist"></div>`;
+
+  TERMS = (q||'').split(/[\s,，、;；]+/).filter(Boolean);
+  $('#hlist').innerHTML = (p.cases||[]).map(h => {
+    const der = h.derivation !== 'ocr_source';
+    const pages = h.page_start + (h.page_end !== h.page_start ? '-' + h.page_end : '');
+    return `<div class="case">
+      <span class="cid" onclick="openCase('${h.case_id}')">${h.case_id}</span>
+      <span class="ctitle"> ${esc(h.title)}</span>
+      ${h.herb_match === 'prescribed'
+        ? '<span class="tier" style="color:var(--accent);border-color:#e0cdbc;background:var(--accent-soft)">有用量</span>'
+        : '<span class="tier" style="color:var(--dim);border-color:var(--line);background:#fafafa">仅正文提及</span>'}
+      ${der ? '<span class="warn">摘要 · 译自日文</span>' : ''}
+      <div class="meta">${esc(h.book)} p${pages}
+        ${h.physician ? ' · ' + esc(h.physician) : ''}</div>
+      <div>${(h.formulas||[]).slice(0,8).map(f =>
+        `<span class="fx" onclick="pickFormula('${esc(f)}')">${esc(f)}</span>`).join('')}</div>
+      <div class="snip">${hl(h.snippet)}</div></div>`;
+  }).join('') || '<div class="empty">无结果。</div>';
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
+// ---- 鉴别 ------------------------------------------------------------------
+$('#dform').onsubmit = e => {
+  e.preventDefault(); showDiff($('#da').value.trim(), $('#db').value.trim());
+};
+document.querySelectorAll('.hint code[data-d]').forEach(c =>
+  c.onclick = () => { const [a,b] = c.dataset.d.split('|');
+    $('#da').value=a; $('#db').value=b; showDiff(a,b); });
+
+async function showDiff(a, b){
+  if (!a || !b) return;
+  tab('diff'); $('#da').value = a; $('#db').value = b;
+  $('#dout').innerHTML = '<p class="note">载入中…</p>';
+  const d = await api('/api/diff', {a, b});
+  if (!d || !d.a){
+    $('#dout').innerHTML = '<p class="note">两个方剂名都必须存在于语料中。</p>';
+    return;
+  }
+  const W = 74;
+  const rows = list => list.length ? list.map(([k,ra,rb]) => `<div class="dual">
+      <span class="nm">${esc(k)}</span>
+      <span class="ba"><span class="n">${Math.round(ra*100)}% </span
+        ><i style="width:${Math.max(1,Math.round(W*ra))}px"></i></span>
+      <span class="bb"><i style="width:${Math.max(1,Math.round(W*rb))}px"></i
+        ><span class="n"> ${Math.round(rb*100)}%</span></span></div>`).join('')
+    : '<p class="note">无</p>';
+
+  $('#dout').innerHTML = `
+    <h2>${esc(d.a)} <span style="color:var(--dim);font-weight:400">vs</span> ${esc(d.b)}</h2>
+    <p class="note">各按其<b>自身</b>医案数计算出现率（${d.a} n=${d.n_a} · ${d.b} n=${d.n_b}）。
+      这是语料频次，不是鉴别规则（§9.1）。</p>
+    <div class="lg"><s style="background:var(--accent)"></s>${esc(d.a)}
+      <s style="background:#3f6f8a"></s>${esc(d.b)}</div>
+    <div class="grid2">
+      <div><h3>更支持 ${esc(d.a)}</h3>${rows(d.supports_a||[])}</div>
+      <div><h3>更支持 ${esc(d.b)}</h3>${rows(d.supports_b||[])}</div>
+    </div>
+    <h3>共同表现</h3>${rows(d.shared||[])}
+    <p class="note" style="margin-top:14px">
+      <button class="ghost" onclick="showFormula('${esc(d.a)}')">${esc(d.a)} 档案</button>
+      <button class="ghost" onclick="showFormula('${esc(d.b)}')">${esc(d.b)} 档案</button></p>`;
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
+function closeBox(){ $('#modal').style.display='none'; document.body.style.overflow=''; }
+$('#modal').onclick = e => { if (e.target.id === 'modal') closeBox(); };
+document.onkeydown = e => { if (e.key === 'Escape') closeBox(); };
+</script>
+</body>
+</html>
