@@ -250,7 +250,7 @@ function updateApiBase() {
 }
 
 const savedBase = localStorage.getItem('hanfang_api_base');
-if (savedBase) API_BASE = savedBase;
+if (savedBase && /^https?:\/\//i.test(savedBase)) API_BASE = savedBase;
 
 api('/api/stats').then(s => {
   $('#stat').textContent =
