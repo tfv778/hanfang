@@ -112,7 +112,7 @@
   <h1>汉方医案检索</h1>
   <div class="sub" id="stat">加载中…</div>
   <div class="sub" style="margin-top:4px">
-    API: <input type="text" id="api-url" placeholder="https://cf44-98-207-61-2.ngrok-free.app" style="font-size:10px;padding:2px 5px;width:180px">
+    API: <input type="text" id="api-url" placeholder="https://ffb0-98-207-61-2.ngrok-free.app" style="font-size:10px;padding:2px 5px;width:180px">
     <button onclick="updateApiBase()" style="font-size:10px;padding:2px 8px;border:1px solid var(--line);background:var(--bg);color:var(--ink)">切换</button>
   </div>
 
@@ -226,7 +226,7 @@
 const $ = s => document.querySelector(s);
 const esc = s => (s||"").replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 let TERMS = [], ACTIVE = null;
-const DEFAULT_API = 'https://cf44-98-207-61-2.ngrok-free.app';
+const DEFAULT_API = 'https://ffb0-98-207-61-2.ngrok-free.app';
 let API_BASE = DEFAULT_API;
 
 const hl = t => esc(t).replace(/《([^》]{1,12})》/g, (m,w) =>
