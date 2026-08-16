@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh">
 <head>
 <meta charset="utf-8">
@@ -73,6 +73,15 @@
       color:var(--accent);border-radius:9px;padding:1px 8px;margin:2px 4px 0 0;cursor:pointer}
   .warn{display:inline-block;font-size:11px;background:var(--warn-bg);color:var(--warn);
         border:1px solid #f0dcc0;border-radius:9px;padding:1px 7px;margin-left:6px}
+  .doctype{display:inline-block;font-size:10.5px;line-height:1.45;font-weight:600;
+        letter-spacing:.04em;border:1px solid var(--line);border-radius:9px;
+        padding:1px 7px;margin-left:6px;color:var(--dim);background:var(--control)}
+  .doctype.case{color:#567039;border-color:#cbd7b8;background:#f3f7ec}
+  .doctype.case-in-article{color:#865e25;border-color:#dfc99e;background:#fbf5e8}
+  .doctype.article{color:#496d87;border-color:#b9cfdd;background:#eef6fa}
+  :root[data-theme="dark"] .doctype.case{color:#b8d393;border-color:#53643e;background:#25301e}
+  :root[data-theme="dark"] .doctype.case-in-article{color:#e0bd7c;border-color:#695633;background:#30291d}
+  :root[data-theme="dark"] .doctype.article{color:#9fc7df;border-color:#405c6d;background:#1d2b33}
   .banner{background:var(--warn-bg);border:1px solid #f0dcc0;color:var(--warn);
           border-radius:5px;padding:9px 12px;font-size:12.5px;margin-bottom:12px}
   #modal{position:fixed;inset:0;background:rgba(30,25,20,.5);display:none;z-index:50;
@@ -159,6 +168,13 @@
       <label class="f">方剂 <input type="text" id="ff" size="12" list="dl-f" placeholder="全部"></label>
       <label class="f">药物 <input type="text" id="fh" size="9" list="dl-h" placeholder="全部"></label>
       <label class="f">书目 <input type="text" id="fb" size="12" list="dl-b" placeholder="全部"></label>
+      <label class="f">类型
+        <select id="fk">
+          <option value="">全部类型</option>
+          <option value="case_in_article">文中病例</option>
+          <option value="case">医案记录</option>
+          <option value="article">文章</option>
+        </select></label>
       <label class="f">摘要层
         <select id="fd">
           <option value="include">并入</option>
@@ -285,6 +301,17 @@ themeToggle.addEventListener('click', () => {
 const hl = t => esc(t).replace(/《([^》]{1,12})》/g, (m,w) =>
   TERMS.includes(w) ? `<mark>${w}</mark>` : m);
 
+const TYPE_LABELS = {
+  case_in_article: '文中病例',
+  case: '医案记录',
+  article: '文章'
+};
+function typeTag(kind){
+  const label = TYPE_LABELS[kind] || '其他记录';
+  const cls = esc((kind || 'other').replaceAll('_', '-'));
+  return `<span class="doctype ${cls}">${label}</span>`;
+}
+
 async function api(p, q){
   const u = new URL(p, API_BASE);
   Object.entries(q||{}).forEach(([k,v]) => v && u.searchParams.set(k,v));
@@ -294,7 +321,7 @@ async function api(p, q){
 
 api('/api/stats').then(s => {
   $('#stat').textContent =
-    `${s.cases} 医案 · ${s.visits} 诊次 · ${s.formulas_with_cases} 方剂 · ${s.books} 种书刊`;
+    `${s.cases} 文献记录 · ${s.visits} 诊次 · ${s.formulas_with_cases} 方剂 · ${s.books} 种书刊`;
 }).catch(e => {
   $('#stat').textContent = `无法连接后端 ${API_BASE} —— 请检查地址或隧道是否在线`;
   $('#stat').classList.add('err');
@@ -327,13 +354,13 @@ document.querySelectorAll('nav button').forEach(b =>
 
 function filters(){
   return {formula: $('#ff').value.trim(), herb: $('#fh').value.trim(),
-          book: $('#fb').value.trim(), derived: $('#fd').value};
+          book: $('#fb').value.trim(), kind: $('#fk').value, derived: $('#fd').value};
 }
 
 $('#form').onsubmit = e => { e.preventDefault(); ACTIVE = null; run(); };
 $('#clear').onclick = () => {
   $('#q').value=''; $('#ff').value=''; $('#fh').value=''; $('#fb').value='';
-  $('#fd').value='include'; ACTIVE=null; $('#cands').hidden=true;
+  $('#fk').value=''; $('#fd').value='include'; ACTIVE=null; $('#cands').hidden=true;
   $('#list').innerHTML=''; $('#resnote').textContent='输入症状开始检索。';
 };
 document.querySelectorAll('.hint code').forEach(c =>
@@ -351,7 +378,8 @@ async function run(page=0){
 
   const hits = await api('/api/cases',
       {q, limit: SEARCH_PAGE_SIZE+1, offset: page*SEARCH_PAGE_SIZE,
-       formula: ACTIVE || f.formula, herb: f.herb, book: f.book, derived: f.derived});
+       formula: ACTIVE || f.formula, herb: f.herb, book: f.book,
+       kind: f.kind, derived: f.derived});
   renderCases(hits.slice(0, SEARCH_PAGE_SIZE), page, hits.length > SEARCH_PAGE_SIZE);
 }
 
@@ -390,7 +418,7 @@ function renderCands(cs){
 }
 
 function renderCases(hits, page=0, hasNext=false){
-  $('#restitle').textContent = ACTIVE ? `医案 · ${ACTIVE}` : '医案';
+  $('#restitle').textContent = ACTIVE ? `检索结果 · ${ACTIVE}` : '检索结果';
   $('#resnote').textContent = hits.length
     ? `第 ${page+1} 页 · 本页 ${hits.length} 条${ACTIVE ? '（已按方剂筛选，再次点击可取消）' : ''}`
     : '无结果。';
@@ -400,6 +428,7 @@ function renderCases(hits, page=0, hasNext=false){
     return `<div class="case">
       <span class="cid" onclick="openCase('${h.case_id}')">${h.case_id}</span>
       <span class="ctitle"> ${esc(h.title)}</span>
+      ${typeTag(h.kind)}
       ${der ? '<span class="warn">摘要 · 译自日文</span>' : ''}
       <div class="meta">${esc(h.book)} p${pages}
         ${h.physician ? ' · ' + esc(h.physician) : ''}
@@ -421,7 +450,7 @@ async function openCase(id){
   const pages = d.page_start + (d.page_end !== d.page_start ? '-' + d.page_end : '');
   $('#boxc').innerHTML = `
     <div style="font-size:12px;color:var(--dim);font-family:ui-monospace,monospace">${d.case_id}</div>
-    <h2 style="font-size:18px;margin:3px 0 8px">${esc(d.title)}</h2>
+    <h2 style="font-size:18px;margin:3px 0 8px">${esc(d.title)} ${typeTag(d.kind)}</h2>
     ${der ? `<div class="banner"><b>派生资料</b> — 日文原刊的中文摘要，经 OCR 与摘要两道加工，
        不可作原文引用。核对：漢方の臨床….txt p${d.page_start}
        ${d.orig_title ? '　原题《' + esc(d.orig_title) + '》' : ''}</div>` : ''}
@@ -509,7 +538,7 @@ async function loadFormulaCases(page=0){
   });
   const rows = hits.slice(0, FORMULA_PAGE_SIZE);
   box.innerHTML = `<div>${rows.map(h =>
-    `<span class="fx" onclick="openCase('${h.case_id}')">${h.case_id}</span>`).join('')
+    `<span style="white-space:nowrap">${typeTag(h.kind)}<span class="fx" onclick="openCase('${h.case_id}')">${h.case_id}</span></span>`).join('')
     || '<span class="note">无</span>'}</div>` +
     pagerHtml(page, hits.length > FORMULA_PAGE_SIZE, 'turnFormulaPage');
 }
@@ -591,6 +620,7 @@ async function showHerb(name, q, page=0){
     return `<div class="case">
       <span class="cid" onclick="openCase('${h.case_id}')">${h.case_id}</span>
       <span class="ctitle"> ${esc(h.title)}</span>
+      ${typeTag(h.kind)}
       ${h.herb_match === 'prescribed'
         ? '<span class="tier" style="color:var(--accent);border-color:#e0cdbc;background:var(--accent-soft)">有用量</span>'
         : '<span class="tier" style="color:var(--dim);border-color:var(--line);background:#fafafa">仅正文提及</span>'}
