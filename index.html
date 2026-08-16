@@ -88,6 +88,10 @@
   .empty{color:var(--dim);font-size:14px;padding:8px 0}
   .spin{color:var(--dim);font-size:13px}
   .row2{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px}
+  .pager{display:flex;align-items:center;justify-content:center;gap:10px;
+         margin-top:16px;color:var(--dim);font-size:12px}
+  .pager button{padding:5px 11px;font-size:12px}
+  button:disabled{opacity:.4;cursor:not-allowed}
   label.f{font-size:12px;color:var(--dim)}
   nav{display:flex;gap:2px;margin-top:11px}
   nav button{background:none;border:0;border-bottom:2px solid transparent;color:var(--dim);
@@ -249,6 +253,20 @@ const $ = s => document.querySelector(s);
 const esc = s => (s||"").replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 let TERMS = [], ACTIVE = null;
 const API_BASE = 'https://ffb0-98-207-61-2.ngrok-free.app';
+const SEARCH_PAGE_SIZE = 25, FORMULA_PAGE_SIZE = 50, HERB_PAGE_SIZE = 40;
+let FORMULA_CASE_NAME = '';
+let HERB_STATE = {name:'', q:''};
+
+function pagerHtml(page, hasNext, action){
+  if (page === 0 && !hasNext) return '';
+  return `<div class="pager">
+    <button type="button" class="ghost" ${page===0?'disabled':''}
+      onclick="${action}(${page-1})">← 上一页</button>
+    <span>第 ${page+1} 页</span>
+    <button type="button" class="ghost" ${hasNext?'':'disabled'}
+      onclick="${action}(${page+1})">下一页 →</button>
+  </div>`;
+}
 
 const themeToggle = $('#theme-toggle');
 function syncThemeToggle(){
@@ -321,7 +339,7 @@ $('#clear').onclick = () => {
 document.querySelectorAll('.hint code').forEach(c =>
   c.onclick = () => { $('#q').value = c.textContent; ACTIVE=null; run(); });
 
-async function run(){
+async function run(page=0){
   const q = $('#q').value.trim(), f = filters();
   $('#resnote').innerHTML = '<span class="spin">检索中…</span>';
   TERMS = q.split(/[\s,，、;；]+/).filter(Boolean);
@@ -332,9 +350,14 @@ async function run(){
   } else { $('#cands').hidden = true; }
 
   const hits = await api('/api/cases',
-      {q, limit: 25, formula: ACTIVE || f.formula, herb: f.herb,
-       book: f.book, derived: f.derived});
-  renderCases(hits);
+      {q, limit: SEARCH_PAGE_SIZE+1, offset: page*SEARCH_PAGE_SIZE,
+       formula: ACTIVE || f.formula, herb: f.herb, book: f.book, derived: f.derived});
+  renderCases(hits.slice(0, SEARCH_PAGE_SIZE), page, hits.length > SEARCH_PAGE_SIZE);
+}
+
+function turnSearchPage(page){
+  if (page < 0) return;
+  run(page); $('#res').scrollIntoView({behavior:'smooth', block:'start'});
 }
 
 function renderCands(cs){
@@ -366,12 +389,12 @@ function renderCands(cs){
   });
 }
 
-function renderCases(hits){
+function renderCases(hits, page=0, hasNext=false){
   $('#restitle').textContent = ACTIVE ? `医案 · ${ACTIVE}` : '医案';
   $('#resnote').textContent = hits.length
-    ? `${hits.length} 条${ACTIVE ? '（已按方剂筛选，再次点击可取消）' : ''}`
+    ? `第 ${page+1} 页 · 本页 ${hits.length} 条${ACTIVE ? '（已按方剂筛选，再次点击可取消）' : ''}`
     : '无结果。';
-  $('#list').innerHTML = hits.map(h => {
+  const rows = hits.map(h => {
     const der = h.derivation !== 'ocr_source';
     const pages = h.page_start + (h.page_end !== h.page_start ? '-' + h.page_end : '');
     return `<div class="case">
@@ -386,6 +409,7 @@ function renderCases(hits){
         `<span class="fx" onclick="pickFormula('${esc(f)}')">${esc(f)}</span>`).join('')}</div>
       <div class="snip">${hl(h.snippet)}</div></div>`;
   }).join('') || '<div class="empty">无结果。</div>';
+  $('#list').innerHTML = rows + pagerHtml(page, hasNext, 'turnSearchPage');
 }
 
 function pickFormula(f){ tab('search'); ACTIVE = f; run();
@@ -466,12 +490,33 @@ async function showFormula(name){
       <span class="q">— 候选特征（§A.11），<b>不是</b>经人工审定的方证卡</span></h3>
     ${bars(p.frequent_observations||[]) || '<p class="note">无</p>'}
 
-    <h3>医案 <span class="q">— 最多列 50 条</span></h3>
-    <div>${(p.case_ids||[]).map(id =>
-      `<span class="fx" onclick="openCase('${id}')">${id}</span>`).join('')}</div>
+    <h3>医案 <span class="q">— 共 ${p.n_cases} 案，每页 ${FORMULA_PAGE_SIZE} 条</span></h3>
+    <div id="formula-cases"><p class="note">载入中…</p></div>
     <p class="note" style="margin-top:14px">
       <button class="ghost" onclick="pickFormula('${esc(p.formula)}')">在检索页按此方筛选医案 →</button></p>`;
+  FORMULA_CASE_NAME = p.formula;
+  loadFormulaCases(0);
   window.scrollTo({top:0, behavior:'smooth'});
+}
+
+async function loadFormulaCases(page=0){
+  if (!FORMULA_CASE_NAME || page < 0) return;
+  const box = $('#formula-cases');
+  box.innerHTML = '<p class="note">载入中…</p>';
+  const hits = await api('/api/cases', {
+    formula: FORMULA_CASE_NAME, limit: FORMULA_PAGE_SIZE+1,
+    offset: page*FORMULA_PAGE_SIZE
+  });
+  const rows = hits.slice(0, FORMULA_PAGE_SIZE);
+  box.innerHTML = `<div>${rows.map(h =>
+    `<span class="fx" onclick="openCase('${h.case_id}')">${h.case_id}</span>`).join('')
+    || '<span class="note">无</span>'}</div>` +
+    pagerHtml(page, hits.length > FORMULA_PAGE_SIZE, 'turnFormulaPage');
+}
+
+function turnFormulaPage(page){
+  if (page < 0) return;
+  loadFormulaCases(page); $('#formula-cases').scrollIntoView({behavior:'smooth', block:'center'});
 }
 
 // ---- 药物 ------------------------------------------------------------------
@@ -484,12 +529,15 @@ document.querySelectorAll('.hint code[data-h]').forEach(c =>
   c.onclick = () => { $('#hname').value = c.textContent; $('#hq').value='';
                       $('#hm').value='all'; showHerb(c.textContent); });
 
-async function showHerb(name, q){
+async function showHerb(name, q, page=0){
   if (!name) return;
+  HERB_STATE = {name, q:q||''};
   tab('herb'); $('#hname').value = name;
   $('#hout').innerHTML = '<p class="note">载入中…</p>';
   const match = $('#hm').value;
-  const p = await api('/api/herb', {name, q, limit: 40, match});
+  const p = await api('/api/herb', {
+    name, q, limit: HERB_PAGE_SIZE+1, offset: page*HERB_PAGE_SIZE, match
+  });
   if (!p || !p.herb){
     $('#hout').innerHTML = `<p class="note">语料中没有「${esc(name)}」。</p>`;
     return;
@@ -532,11 +580,12 @@ async function showHerb(name, q){
     <h3>医案 <span class="q">— ${
       match==='prescribed' ? '仅列有用量者' :
       match==='mentioned'  ? `仅列正文提及者（${p.n_mentioned} 案）` :
-      '有用量者在前'}${q ? '，已按症状筛选' : ''}，最多 40 条</span></h3>
+      '有用量者在前'}${q ? '，已按症状筛选' : ''}，第 ${page+1} 页</span></h3>
     <div id="hlist"></div>`;
 
   TERMS = (q||'').split(/[\s,，、;；]+/).filter(Boolean);
-  $('#hlist').innerHTML = (p.cases||[]).map(h => {
+  const herbHits = (p.cases||[]).slice(0, HERB_PAGE_SIZE);
+  const rows = herbHits.map(h => {
     const der = h.derivation !== 'ocr_source';
     const pages = h.page_start + (h.page_end !== h.page_start ? '-' + h.page_end : '');
     return `<div class="case">
@@ -552,7 +601,14 @@ async function showHerb(name, q){
         `<span class="fx" onclick="pickFormula('${esc(f)}')">${esc(f)}</span>`).join('')}</div>
       <div class="snip">${hl(h.snippet)}</div></div>`;
   }).join('') || '<div class="empty">无结果。</div>';
+  $('#hlist').innerHTML = rows +
+    pagerHtml(page, (p.cases||[]).length > HERB_PAGE_SIZE, 'turnHerbPage');
   window.scrollTo({top:0, behavior:'smooth'});
+}
+
+function turnHerbPage(page){
+  if (page < 0) return;
+  showHerb(HERB_STATE.name, HERB_STATE.q, page);
 }
 
 // ---- 鉴别 ------------------------------------------------------------------
