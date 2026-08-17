@@ -361,7 +361,7 @@
         <button type="submit">提交反馈</button>
         <span class="feedback-status" id="feedback-status" aria-live="polite"></span>
       </div>
-      <div class="feedback-privacy">反馈会写入维护者的 Google Sheet。本站同时记录访问时间、IP、栏目切换与检索条件，不记录聊天内容。</div>
+      <div class="feedback-privacy">反馈会写入维护者的 Google Sheet。本站同时记录访问时间、IP、栏目切换、检索条件与界面点击，不记录聊天内容。</div>
     </form>
   </div>
 </div>
@@ -465,6 +465,26 @@ function logSearch(q, f, page){
   parts.push(`page=${page + 1}`);
   logActivity(`search:${parts.join('; ')}`.replace(/\s+/g, ' ').slice(0, 200));
 }
+
+function clickActivity(el){
+  let kind = 'control';
+  if (el.dataset.tab) kind = 'tab';
+  else if (el.matches('.cid')) kind = 'case';
+  else if (el.matches('.fx')) kind = 'formula';
+  else if (el.matches('tr.f')) kind = 'formula_row';
+  else if (el.matches('.hint code')) kind = 'search_hint';
+  else if (el.matches('button')) kind = 'button';
+  else if (el.matches('a')) kind = 'link';
+  const label = (el.dataset.tab || el.dataset.f || el.dataset.prof ||
+    el.getAttribute('aria-label') || el.id || el.textContent || 'unlabeled')
+    .replace(/\s+/g, ' ').trim().slice(0, 120);
+  logActivity(`click:${kind}:${label}`.slice(0, 200));
+}
+
+document.addEventListener('click', e => {
+  const el = e.target.closest('.cid,.fx,tr.f,.hint code,button,a,[role="button"]');
+  if (el) clickActivity(el);
+}, {capture:true});
 
 api('/api/stats').then(s => {
   $('#stat').textContent =
