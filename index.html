@@ -362,7 +362,7 @@
         <button type="submit">提交反馈</button>
         <span class="feedback-status" id="feedback-status" aria-live="polite"></span>
       </div>
-      <div class="feedback-privacy">反馈会写入维护者的 Google Sheet。本站同时记录访问时间、IP、栏目切换、检索条件与界面点击，不记录聊天内容。</div>
+      <div class="feedback-privacy">反馈会写入维护者的 Google Sheet。本站同时记录访问时间、IP、浏览内容、检索条件、问答内容与界面点击。</div>
     </form>
   </div>
 </div>
@@ -457,6 +457,11 @@ function logActivity(activity){
   apiPost('/api/activity', {activity}).catch(() => {});
 }
 
+function logView(kind, content){
+  const detail = typeof content === 'string' ? content : JSON.stringify(content);
+  logActivity(`view:${kind}:content=${detail}`.replace(/\s+/g, ' ').slice(0, 9000));
+}
+
 function logSearch(q, f, page){
   const parts = [];
   if (q) parts.push(`query=${q}`);
@@ -472,16 +477,20 @@ function logSearch(q, f, page){
 function clickActivity(el){
   let kind = 'control';
   if (el.dataset.tab) kind = 'tab';
+  else if (el.matches('.chat-source')) kind = 'article';
   else if (el.matches('.cid')) kind = 'case';
   else if (el.matches('.fx')) kind = 'formula';
   else if (el.matches('tr.f')) kind = 'formula_row';
   else if (el.matches('.hint code')) kind = 'search_hint';
   else if (el.matches('button')) kind = 'button';
   else if (el.matches('a')) kind = 'link';
-  const label = (el.dataset.tab || el.dataset.f || el.dataset.prof ||
-    el.getAttribute('aria-label') || el.id || el.textContent || 'unlabeled')
-    .replace(/\s+/g, ' ').trim().slice(0, 120);
-  logActivity(`click:${kind}:${label}`.slice(0, 200));
+  const visibleText = (el.textContent || '').replace(/\s+/g, ' ').trim();
+  let detail = el.dataset.tab || el.dataset.f || el.dataset.prof ||
+    el.getAttribute('aria-label') || el.id || visibleText || 'unlabeled';
+  if (visibleText && visibleText !== detail) detail += `; label=${visibleText}`;
+  if (el.matches('.cid')) detail = el.closest('.case')?.textContent || detail;
+  detail = detail.replace(/\s+/g, ' ').trim().slice(0, 8000);
+  logActivity(`click:${kind}:content=${detail}`.slice(0, 9000));
 }
 
 document.addEventListener('click', e => {
@@ -518,11 +527,14 @@ function tab(name){
   });
   document.querySelectorAll('nav button').forEach(b =>
     b.classList.toggle('on', b.dataset.tab === name));
-  logActivity(`tab:${name}`);
+  const label = document.querySelector(`nav button[data-tab="${name}"]`)?.textContent || name;
+  const content = ($('#pane-'+name)?.textContent || '').replace(/\s+/g, ' ').trim();
+  logView('tab', {name, label, content});
 }
 document.querySelectorAll('nav button').forEach(b =>
   b.onclick = () => tab(b.dataset.tab));
-logActivity('page_view');
+logView('page', {url:location.href, tab:'chat', label:'问答',
+  content:($('#pane-chat').textContent || '').replace(/\s+/g, ' ').trim()});
 
 function filters(){
   return {formula: $('#ff').value.trim(), herb: $('#fh').value.trim(),
@@ -612,6 +624,11 @@ function renderCases(hits, page=0, hasNext=false){
       <div class="snip">${hl(h.snippet)}</div></div>`;
   }).join('') || '<div class="empty">无结果。</div>';
   $('#list').innerHTML = rows + pagerHtml(page, hasNext, 'turnSearchPage');
+  logView('search_results', {
+    page:page + 1,
+    results:hits.map(h => ({id:h.case_id, title:h.title, type:h.kind,
+      book:h.book, snippet:h.snippet}))
+  });
 }
 
 function pickFormula(f){ tab('search'); ACTIVE = f; run();
@@ -621,6 +638,11 @@ async function openCase(id){
   const d = await api('/api/case', {id});
   const der = d.derivation && d.derivation !== 'ocr_source';
   const pages = d.page_start + (d.page_end !== d.page_start ? '-' + d.page_end : '');
+  const content = (d.visits||[]).map(v => `${v.label||''}: ${v.text||''}`).join(' | ')
+    || d.text || '';
+  logView('article', {id:d.case_id, title:d.title, type:d.kind, book:d.book,
+    pages, physician:d.physician, citation:d.citation, original_title:d.orig_title,
+    content});
   $('#boxc').innerHTML = `
     <div style="font-size:12px;color:var(--dim);font-family:ui-monospace,monospace">${d.case_id}</div>
     <h2 style="font-size:18px;margin:3px 0 8px">${esc(d.title)} ${typeTag(d.kind)}</h2>
@@ -661,6 +683,7 @@ async function showFormula(name){
     $('#fout').innerHTML = `<p class="note">语料中没有「${esc(name)}」。请从输入框的候选列表中选择。</p>`;
     return;
   }
+  logView('formula', p);
   const n = p.n_cases || 1;
   const bars = rows => rows.map(([k,c]) => `<div class="fbar">
       <span class="nm">${esc(k)}</span>
@@ -710,6 +733,9 @@ async function loadFormulaCases(page=0){
     offset: page*FORMULA_PAGE_SIZE
   });
   const rows = hits.slice(0, FORMULA_PAGE_SIZE);
+  logView('formula_cases', {formula:FORMULA_CASE_NAME, page:page + 1,
+    results:rows.map(h => ({id:h.case_id, title:h.title, type:h.kind,
+      book:h.book, snippet:h.snippet}))});
   box.innerHTML = `<div>${rows.map(h =>
     `<span style="white-space:nowrap">${typeTag(h.kind)}<span class="fx" onclick="openCase('${h.case_id}')">${h.case_id}</span></span>`).join('')
     || '<span class="note">无</span>'}</div>` +
@@ -744,6 +770,7 @@ async function showHerb(name, q, page=0){
     $('#hout').innerHTML = `<p class="note">语料中没有「${esc(name)}」。</p>`;
     return;
   }
+  logView('herb', p);
   const renamed = p.herb !== p.query;
   const dose = (p.dose_stats||[]).map(d =>
     `<span class="pill">${esc(d.unit)}：中位 ${d.median} ・ ${d.min}–${d.max}（n=${d.n}）</span>`).join('');
@@ -895,6 +922,7 @@ async function showDiff(a, b){
     $('#dout').innerHTML = '<p class="note">两个方剂名都必须存在于语料中。</p>';
     return;
   }
+  logView('comparison', d);
   const W = 74;
   const rows = list => list.length ? list.map(([k,ra,rb]) => `<div class="dual">
       <span class="nm">${esc(k)}</span>
