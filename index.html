@@ -318,6 +318,7 @@
         <span class="chat-mode" id="chat-mode">连接中…</span>
       </div>
       <p class="note">答案必须以当前语料为依据。它适合文献研究，不用于诊断、选方或个体化医疗建议。</p>
+      <p class="note">问答内容会与访问时间、IP 及匿名会话编号一并记录，用于改进检索和回答质量。</p>
       <div class="chat-log" id="chat-log" aria-live="polite">
         <div class="chat-message assistant"><div class="chat-bubble">
           <div class="chat-who">文献助手</div>
@@ -380,6 +381,8 @@ const SEARCH_PAGE_SIZE = 25, FORMULA_PAGE_SIZE = 50, HERB_PAGE_SIZE = 40;
 let FORMULA_CASE_NAME = '';
 let HERB_STATE = {name:'', q:''};
 let CHAT_HISTORY = [], CHAT_BUSY = false;
+const CHAT_SESSION_ID = (crypto.randomUUID?.() ||
+  `${Date.now()}-${Math.random().toString(36).slice(2)}`).slice(0, 40);
 
 function pagerHtml(page, hasNext, action){
   if (page === 0 && !hasNext) return '';
@@ -850,7 +853,9 @@ async function sendChat(message){
     '<div class="chat-message assistant" id="chat-thinking"><div class="chat-bubble"><span class="spin">正在检索语料并整理来源…</span></div></div>');
   $('#chat-log').scrollTop = $('#chat-log').scrollHeight;
   try {
-    const d = await apiPost('/api/chat', {message, history:prior});
+    const d = await apiPost('/api/chat', {
+      message, history:prior, session_id:CHAT_SESSION_ID
+    });
     $('#chat-thinking')?.remove();
     appendChat('assistant', d.answer, d.sources||[], d.notice||'');
     CHAT_HISTORY.push({role:'assistant', content:d.answer});
