@@ -200,14 +200,14 @@
   </div>
 
   <nav>
-    <button class="on" data-tab="search">检索</button>
+    <button class="on" data-tab="chat">问答</button>
+    <button data-tab="search">检索</button>
     <button data-tab="formula">方剂档案</button>
     <button data-tab="herb">药物</button>
     <button data-tab="diff">鉴别</button>
-    <button data-tab="chat">问答</button>
   </nav>
 
-  <div id="hd-search">
+  <div id="hd-search" hidden>
     <form id="form" autocomplete="off">
       <input type="text" id="q" placeholder="输入症状／体征，空格分隔　例：心下痞 肠鸣 下利">
       <button type="submit">检索</button>
@@ -276,7 +276,7 @@
       <code data-d="小柴胡汤|大柴胡汤">小柴胡汤 ／ 大柴胡汤</code></p>
   </div>
 
-  <div id="hd-chat" hidden>
+  <div id="hd-chat">
     <p class="hint">先检索语料，再依据命中的文章和病例回答；每条答案附可打开的来源。</p>
   </div>
 </div></header>
@@ -286,7 +286,7 @@
 <datalist id="dl-b"></datalist>
 
 <main class="wrap">
-  <div id="pane-search">
+  <div id="pane-search" hidden>
     <section id="cands" hidden>
       <h2>候选方 · 按医案证据量排序</h2>
       <p class="note">这是语料统计，不是方证匹配度（设计文档 §9.1）。点击方剂查看其医案。</p>
@@ -311,7 +311,7 @@
     <section id="dout"><p class="note">输入两个方剂名进行比较。</p></section>
   </div>
 
-  <div id="pane-chat" hidden>
+  <div id="pane-chat">
     <section class="chat-shell">
       <div class="chat-head">
         <h2>RAG 文献问答</h2>
@@ -510,7 +510,7 @@ api('/api/herbs').then(r => fill($('#dl-h'), r));
 api('/api/books').then(r => fill($('#dl-b'), r));
 
 // ---- tabs -----------------------------------------------------------------
-const TABS = ['search','formula','herb','diff','chat'];
+const TABS = ['chat','search','formula','herb','diff'];
 function tab(name){
   TABS.forEach(t => {
     $('#pane-'+t).hidden = t !== name;
