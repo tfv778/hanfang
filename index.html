@@ -729,6 +729,12 @@ function chatMarkup(text){
     '<b class="chat-ref">[S$1]</b>').replace(/\n/g, '<br>');
 }
 
+function chatModeLabel(mode, model){
+  if (mode === 'openrouter') return `生成式回答 · OpenRouter · ${model||'自动选模'}`;
+  if (mode === 'openai') return `生成式回答 · ${model||'OpenAI'}`;
+  return '语料检索模式';
+}
+
 function appendChat(role, content, sources=[], notice=''){
   const log = $('#chat-log');
   const sourceHtml = sources.length ? `<div class="chat-sources">${sources.map((s,i) =>
@@ -760,8 +766,7 @@ async function sendChat(message){
     $('#chat-thinking')?.remove();
     appendChat('assistant', d.answer, d.sources||[], d.notice||'');
     CHAT_HISTORY.push({role:'assistant', content:d.answer});
-    $('#chat-mode').textContent = d.mode === 'openai'
-      ? `生成式回答 · ${d.model||'OpenAI'}` : '语料检索模式';
+    $('#chat-mode').textContent = chatModeLabel(d.mode, d.model);
   } catch (e) {
     $('#chat-thinking')?.remove();
     appendChat('assistant', `暂时无法完成问答：${e.message}`);
@@ -777,8 +782,7 @@ $('#chat-input').onkeydown = e => {
 document.querySelectorAll('[data-chat-q]').forEach(button =>
   button.onclick = () => { tab('chat'); sendChat(button.dataset.chatQ); });
 api('/api/chat/status').then(status => {
-  $('#chat-mode').textContent = status.mode === 'openai'
-    ? `生成式回答 · ${status.model}` : '语料检索模式';
+  $('#chat-mode').textContent = chatModeLabel(status.mode, status.model);
 }).catch(() => { $('#chat-mode').textContent = '问答服务离线'; });
 
 // ---- 鉴别 ------------------------------------------------------------------
