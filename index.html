@@ -157,7 +157,27 @@
        border-radius:6px;background:var(--control);color:var(--ink)}
   .chat-prompts{margin:8px 0 0}
   .chat-prompts button{font-size:11.5px;padding:3px 8px;margin:3px 4px 0 0}
-  @media(max-width:620px){.chat-bubble{max-width:94%}#chat-form{grid-template-columns:1fr}}
+  .feedback-trigger{position:fixed;right:0;top:55%;z-index:42;border-radius:7px 0 0 7px;
+       padding:12px 7px;writing-mode:vertical-rl;letter-spacing:.12em;box-shadow:0 3px 14px rgba(0,0,0,.16)}
+  #feedback-modal{position:fixed;inset:0;z-index:60;display:none;place-items:center;
+       padding:20px;background:rgba(30,25,20,.56)}
+  #feedback-modal.open{display:grid}
+  .feedback-card{width:min(460px,100%);max-height:92vh;overflow:auto;position:relative;
+       background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:10px;
+       padding:22px 24px 24px;box-shadow:0 18px 50px rgba(0,0,0,.24)}
+  .feedback-card h2{margin:0 34px 4px 0}
+  .feedback-card label{display:block;margin-top:12px;font-size:12px;color:var(--dim)}
+  .feedback-card input,.feedback-card select,.feedback-card textarea{width:100%;margin-top:4px;
+       padding:8px 10px;border:1px solid var(--line);border-radius:5px;background:var(--control);
+       color:var(--ink);font:inherit;font-size:13px}
+  .feedback-card textarea{min-height:120px;resize:vertical;line-height:1.5}
+  .feedback-actions{display:flex;align-items:center;gap:9px;margin-top:14px;flex-wrap:wrap}
+  .feedback-status{font-size:11px;color:var(--dim)}
+  .feedback-privacy{font-size:10.5px;color:var(--dim);margin-top:8px}
+  @media(max-width:620px){
+    .chat-bubble{max-width:94%}#chat-form{grid-template-columns:1fr}
+    .feedback-trigger{top:auto;bottom:82px;padding:9px 6px}
+  }
 </style>
 <script>
   (() => {
@@ -316,6 +336,35 @@
     </section>
   </div>
 </main>
+
+<button type="button" class="feedback-trigger" id="feedback-trigger"
+  aria-haspopup="dialog" aria-controls="feedback-modal">反馈</button>
+<div id="feedback-modal" role="dialog" aria-modal="true" aria-labelledby="feedback-title">
+  <div class="feedback-card">
+    <button type="button" class="close" id="feedback-close" aria-label="关闭反馈表单">×</button>
+    <h2 id="feedback-title">意见反馈</h2>
+    <p class="note">告诉我们哪里需要修正，或希望增加什么功能。</p>
+    <form id="feedback-form">
+      <label for="feedback-type">反馈类型</label>
+      <select id="feedback-type">
+        <option value="内容纠错">内容纠错</option>
+        <option value="检索问题">检索问题</option>
+        <option value="功能建议">功能建议</option>
+        <option value="其他反馈">其他反馈</option>
+      </select>
+      <label for="feedback-contact">您的邮箱（可选）</label>
+      <input id="feedback-contact" type="email" autocomplete="email" placeholder="便于回复您">
+      <label for="feedback-message">反馈内容</label>
+      <textarea id="feedback-message" required maxlength="3000"
+        placeholder="请描述问题；如涉及某条记录，建议附上记录编号。"></textarea>
+      <div class="feedback-actions">
+        <button type="submit">用邮件发送</button>
+        <span class="feedback-status" id="feedback-status" aria-live="polite"></span>
+      </div>
+      <div class="feedback-privacy">提交后会打开您的邮件应用，并发送至 zhuoming.li01@gmail.com；本站不会保存反馈内容。</div>
+    </form>
+  </div>
+</div>
 
 <div id="modal"><div id="box">
   <button class="close" onclick="closeBox()">×</button>
@@ -830,7 +879,46 @@ async function showDiff(a, b){
 
 function closeBox(){ $('#modal').style.display='none'; document.body.style.overflow=''; }
 $('#modal').onclick = e => { if (e.target.id === 'modal') closeBox(); };
-document.onkeydown = e => { if (e.key === 'Escape') closeBox(); };
+const feedbackModal = $('#feedback-modal');
+function openFeedback(){
+  feedbackModal.classList.add('open');
+  document.body.style.overflow = 'hidden';
+  $('#feedback-status').textContent = '';
+  setTimeout(() => $('#feedback-message').focus(), 0);
+}
+function closeFeedback(){
+  feedbackModal.classList.remove('open');
+  document.body.style.overflow = '';
+  $('#feedback-trigger').focus();
+}
+$('#feedback-trigger').onclick = openFeedback;
+$('#feedback-close').onclick = closeFeedback;
+feedbackModal.onclick = e => { if (e.target === feedbackModal) closeFeedback(); };
+$('#feedback-form').onsubmit = e => {
+  e.preventDefault();
+  if (!e.currentTarget.reportValidity()) return;
+  const type = $('#feedback-type').value;
+  const contact = $('#feedback-contact').value.trim() || '未提供';
+  const pageTab = document.querySelector('nav button.on')?.textContent.trim() || '未知';
+  const body = [
+    `反馈类型：${type}`,
+    `联系邮箱：${contact}`,
+    `当前页面：${location.href}`,
+    `当前栏目：${pageTab}`,
+    '',
+    '反馈内容：',
+    $('#feedback-message').value.trim()
+  ].join('\n');
+  const subject = encodeURIComponent(`汉方医案检索反馈：${type}`);
+  const mailto = `mailto:zhuoming.li01@gmail.com?subject=${subject}&body=${encodeURIComponent(body)}`;
+  $('#feedback-status').textContent = '正在打开您的邮件应用…';
+  location.href = mailto;
+};
+document.onkeydown = e => {
+  if (e.key !== 'Escape') return;
+  if (feedbackModal.classList.contains('open')) closeFeedback();
+  else closeBox();
+};
 </script>
 </body>
 </html>
