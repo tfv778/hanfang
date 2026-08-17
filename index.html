@@ -130,6 +130,34 @@
   .lg{font-size:12px;color:var(--dim);margin-bottom:10px}
   .lg s{display:inline-block;width:9px;height:9px;border-radius:2px;
        vertical-align:middle;margin:0 3px 0 10px}
+  .chat-shell{max-width:900px;margin:0 auto}
+  .chat-head{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:2px}
+  .chat-mode{font-size:10.5px;border:1px solid var(--line);border-radius:9px;
+       padding:1px 8px;color:var(--dim);background:var(--control)}
+  .chat-log{min-height:330px;max-height:62vh;overflow:auto;padding:12px 4px 18px;
+       border-top:1px solid var(--line-soft);border-bottom:1px solid var(--line-soft)}
+  .chat-message{display:flex;margin:13px 0}
+  .chat-message.user{justify-content:flex-end}
+  .chat-bubble{max-width:82%;padding:10px 13px;border-radius:10px;
+       background:var(--accent-soft);font-size:14px;white-space:normal}
+  .chat-message.assistant .chat-bubble{background:var(--control);border:1px solid var(--line)}
+  .chat-who{font-size:10px;letter-spacing:.08em;color:var(--dim);margin-bottom:4px}
+  .chat-sources{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+       gap:7px;margin-top:10px}
+  button.chat-source{display:block;text-align:left;padding:7px 9px;background:var(--panel);
+       color:var(--ink);border:1px solid var(--line);font-size:11.5px;line-height:1.45}
+  button.chat-source:hover{background:var(--accent-soft)}
+  .chat-source b{color:var(--accent);font-family:ui-monospace,Menlo,monospace}
+  .chat-source span{display:block;color:var(--dim);margin-top:2px}
+  .chat-notice{font-size:11px;color:var(--warn);margin-top:8px}
+  .chat-ref{color:var(--accent);font-family:ui-monospace,Menlo,monospace}
+  #chat-form{display:grid;grid-template-columns:1fr auto;gap:8px;margin-top:12px;align-items:end}
+  #chat-input{width:100%;min-height:52px;max-height:150px;resize:vertical;font:inherit;
+       font-size:14px;line-height:1.5;padding:9px 11px;border:1px solid var(--line);
+       border-radius:6px;background:var(--control);color:var(--ink)}
+  .chat-prompts{margin:8px 0 0}
+  .chat-prompts button{font-size:11.5px;padding:3px 8px;margin:3px 4px 0 0}
+  @media(max-width:620px){.chat-bubble{max-width:94%}#chat-form{grid-template-columns:1fr}}
 </style>
 <script>
   (() => {
@@ -156,6 +184,7 @@
     <button data-tab="formula">方剂档案</button>
     <button data-tab="herb">药物</button>
     <button data-tab="diff">鉴别</button>
+    <button data-tab="chat">问答</button>
   </nav>
 
   <div id="hd-search">
@@ -226,6 +255,10 @@
       <code data-d="真武汤|苓桂术甘汤">真武汤 ／ 苓桂术甘汤</code>
       <code data-d="小柴胡汤|大柴胡汤">小柴胡汤 ／ 大柴胡汤</code></p>
   </div>
+
+  <div id="hd-chat" hidden>
+    <p class="hint">先检索语料，再依据命中的文章和病例回答；每条答案附可打开的来源。</p>
+  </div>
 </div></header>
 
 <datalist id="dl-f"></datalist>
@@ -257,6 +290,31 @@
   <div id="pane-diff" hidden>
     <section id="dout"><p class="note">输入两个方剂名进行比较。</p></section>
   </div>
+
+  <div id="pane-chat" hidden>
+    <section class="chat-shell">
+      <div class="chat-head">
+        <h2>RAG 文献问答</h2>
+        <span class="chat-mode" id="chat-mode">连接中…</span>
+      </div>
+      <p class="note">答案必须以当前语料为依据。它适合文献研究，不用于诊断、选方或个体化医疗建议。</p>
+      <div class="chat-log" id="chat-log" aria-live="polite">
+        <div class="chat-message assistant"><div class="chat-bubble">
+          <div class="chat-who">文献助手</div>
+          可以问病例经过、方剂在语料中的使用、药物搭配，或直接给我一个记录编号。答案下方会列出检索来源。
+        </div></div>
+      </div>
+      <div class="chat-prompts">
+        <button type="button" class="ghost" data-chat-q="JR-RIN_23_230300-06-C6 后来怎么样？">追问一个病例</button>
+        <button type="button" class="ghost" data-chat-q="语料中失眠好转或痊愈的病例有哪些？">查失眠转归</button>
+        <button type="button" class="ghost" data-chat-q="二术汤在这些记录中用于哪些表现？">查方剂使用</button>
+      </div>
+      <form id="chat-form" autocomplete="off">
+        <textarea id="chat-input" maxlength="2000" placeholder="输入问题；Enter 发送，Shift+Enter 换行"></textarea>
+        <button type="submit" id="chat-send">发送</button>
+      </form>
+    </section>
+  </div>
 </main>
 
 <div id="modal"><div id="box">
@@ -272,6 +330,7 @@ const API_BASE = 'https://ffb0-98-207-61-2.ngrok-free.app';
 const SEARCH_PAGE_SIZE = 25, FORMULA_PAGE_SIZE = 50, HERB_PAGE_SIZE = 40;
 let FORMULA_CASE_NAME = '';
 let HERB_STATE = {name:'', q:''};
+let CHAT_HISTORY = [], CHAT_BUSY = false;
 
 function pagerHtml(page, hasNext, action){
   if (page === 0 && !hasNext) return '';
@@ -315,8 +374,31 @@ function typeTag(kind){
 async function api(p, q){
   const u = new URL(p, API_BASE);
   Object.entries(q||{}).forEach(([k,v]) => v && u.searchParams.set(k,v));
-  const r = await fetch(u, {headers: {'ngrok-skip-browser-warning': '1'}});
-  return r.json();
+  let error;
+  for (let attempt=0; attempt<2; attempt++){
+    try {
+      const r = await fetch(u, {headers: {'ngrok-skip-browser-warning': '1'}});
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+      return data;
+    } catch (e) {
+      error = e;
+      if (!attempt) await new Promise(resolve => setTimeout(resolve, 650));
+    }
+  }
+  throw error;
+}
+
+async function apiPost(p, body){
+  const u = new URL(p, API_BASE);
+  const r = await fetch(u, {
+    method: 'POST',
+    headers: {'Content-Type':'application/json', 'ngrok-skip-browser-warning':'1'},
+    body: JSON.stringify(body)
+  });
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+  return data;
 }
 
 api('/api/stats').then(s => {
@@ -340,7 +422,7 @@ api('/api/herbs').then(r => fill($('#dl-h'), r));
 api('/api/books').then(r => fill($('#dl-b'), r));
 
 // ---- tabs -----------------------------------------------------------------
-const TABS = ['search','formula','herb','diff'];
+const TABS = ['search','formula','herb','diff','chat'];
 function tab(name){
   TABS.forEach(t => {
     $('#pane-'+t).hidden = t !== name;
@@ -640,6 +722,64 @@ function turnHerbPage(page){
   if (page < 0) return;
   showHerb(HERB_STATE.name, HERB_STATE.q, page);
 }
+
+// ---- RAG 文献问答 ---------------------------------------------------------
+function chatMarkup(text){
+  return esc(text).replace(/\[S(\d+)\]/g,
+    '<b class="chat-ref">[S$1]</b>').replace(/\n/g, '<br>');
+}
+
+function appendChat(role, content, sources=[], notice=''){
+  const log = $('#chat-log');
+  const sourceHtml = sources.length ? `<div class="chat-sources">${sources.map((s,i) =>
+    `<button type="button" class="chat-source" onclick="openCase('${s.case_id}')">
+       <b>[S${i+1}] ${esc(s.case_id)}</b>${esc(s.title)}
+       <span>${esc(s.kind_label)} · ${esc(s.book)}${s.pages ? ' p'+esc(s.pages) : ''}</span>
+     </button>`).join('')}</div>` : '';
+  log.insertAdjacentHTML('beforeend', `<div class="chat-message ${role}"><div class="chat-bubble">
+    <div class="chat-who">${role==='user'?'你':'文献助手'}</div>
+    <div>${chatMarkup(content)}</div>${sourceHtml}
+    ${notice ? `<div class="chat-notice">${esc(notice)}</div>` : ''}
+  </div></div>`);
+  log.scrollTop = log.scrollHeight;
+}
+
+async function sendChat(message){
+  message = (message||'').trim();
+  if (!message || CHAT_BUSY) return;
+  const prior = CHAT_HISTORY.slice(-8);
+  CHAT_HISTORY.push({role:'user', content:message});
+  appendChat('user', message);
+  $('#chat-input').value = '';
+  CHAT_BUSY = true; $('#chat-send').disabled = true;
+  $('#chat-log').insertAdjacentHTML('beforeend',
+    '<div class="chat-message assistant" id="chat-thinking"><div class="chat-bubble"><span class="spin">正在检索语料并整理来源…</span></div></div>');
+  $('#chat-log').scrollTop = $('#chat-log').scrollHeight;
+  try {
+    const d = await apiPost('/api/chat', {message, history:prior});
+    $('#chat-thinking')?.remove();
+    appendChat('assistant', d.answer, d.sources||[], d.notice||'');
+    CHAT_HISTORY.push({role:'assistant', content:d.answer});
+    $('#chat-mode').textContent = d.mode === 'openai'
+      ? `生成式回答 · ${d.model||'OpenAI'}` : '语料检索模式';
+  } catch (e) {
+    $('#chat-thinking')?.remove();
+    appendChat('assistant', `暂时无法完成问答：${e.message}`);
+  } finally {
+    CHAT_BUSY = false; $('#chat-send').disabled = false; $('#chat-input').focus();
+  }
+}
+
+$('#chat-form').onsubmit = e => { e.preventDefault(); sendChat($('#chat-input').value); };
+$('#chat-input').onkeydown = e => {
+  if (e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); sendChat(e.target.value); }
+};
+document.querySelectorAll('[data-chat-q]').forEach(button =>
+  button.onclick = () => { tab('chat'); sendChat(button.dataset.chatQ); });
+api('/api/chat/status').then(status => {
+  $('#chat-mode').textContent = status.mode === 'openai'
+    ? `生成式回答 · ${status.model}` : '语料检索模式';
+}).catch(() => { $('#chat-mode').textContent = '问答服务离线'; });
 
 // ---- 鉴别 ------------------------------------------------------------------
 $('#dform').onsubmit = e => {
