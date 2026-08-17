@@ -361,7 +361,7 @@
         <button type="submit">提交反馈</button>
         <span class="feedback-status" id="feedback-status" aria-live="polite"></span>
       </div>
-      <div class="feedback-privacy">反馈会写入维护者的 Google Sheet。本站同时记录访问时间、IP 与粗略页面活动，不记录搜索词或聊天内容。</div>
+      <div class="feedback-privacy">反馈会写入维护者的 Google Sheet。本站同时记录访问时间、IP、栏目切换与检索条件，不记录聊天内容。</div>
     </form>
   </div>
 </div>
@@ -454,6 +454,18 @@ function logActivity(activity){
   apiPost('/api/activity', {activity}).catch(() => {});
 }
 
+function logSearch(q, f, page){
+  const parts = [];
+  if (q) parts.push(`query=${q}`);
+  if (ACTIVE || f.formula) parts.push(`formula=${ACTIVE || f.formula}`);
+  if (f.herb) parts.push(`herb=${f.herb}`);
+  if (f.book) parts.push(`book=${f.book}`);
+  if (f.kind) parts.push(`type=${f.kind}`);
+  if (f.derived && f.derived !== 'include') parts.push(`summary=${f.derived}`);
+  parts.push(`page=${page + 1}`);
+  logActivity(`search:${parts.join('; ')}`.replace(/\s+/g, ' ').slice(0, 200));
+}
+
 api('/api/stats').then(s => {
   $('#stat').textContent =
     `${s.cases} 文献记录 · ${s.visits} 诊次 · ${s.formulas_with_cases} 方剂 · ${s.books} 种书刊`;
@@ -505,6 +517,7 @@ document.querySelectorAll('.hint code').forEach(c =>
 
 async function run(page=0){
   const q = $('#q').value.trim(), f = filters();
+  logSearch(q, f, page);
   $('#resnote').innerHTML = '<span class="spin">检索中…</span>';
   TERMS = q.split(/[\s,，、;；]+/).filter(Boolean);
 
