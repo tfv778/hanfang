@@ -174,6 +174,7 @@
   .feedback-actions{display:flex;align-items:center;gap:9px;margin-top:14px;flex-wrap:wrap}
   .feedback-status{font-size:11px;color:var(--dim)}
   .feedback-privacy{font-size:10.5px;color:var(--dim);margin-top:8px}
+  .privacy-note{padding:0 16px 24px;color:var(--dim);font-size:10.5px;text-align:center}
   @media(max-width:620px){
     .chat-bubble{max-width:94%}#chat-form{grid-template-columns:1fr}
     .feedback-trigger{top:auto;bottom:82px;padding:9px 6px}
@@ -358,13 +359,15 @@
       <textarea id="feedback-message" required maxlength="3000"
         placeholder="请描述问题；如涉及某条记录，建议附上记录编号。"></textarea>
       <div class="feedback-actions">
-        <button type="submit">用邮件发送</button>
+        <button type="submit">提交反馈</button>
         <span class="feedback-status" id="feedback-status" aria-live="polite"></span>
       </div>
-      <div class="feedback-privacy">提交后会打开您的邮件应用，并发送至 zhuoming.li01@gmail.com；本站不会保存反馈内容。</div>
+      <div class="feedback-privacy">反馈会写入维护者的 Google Sheet。本站同时记录访问时间、IP 与粗略页面活动，不记录搜索词或聊天内容。</div>
     </form>
   </div>
 </div>
+
+<div class="privacy-note">为改进服务，本站记录访问时间、IP 与栏目切换；不记录搜索词或聊天内容。</div>
 
 <div id="modal"><div id="box">
   <button class="close" onclick="closeBox()">×</button>
@@ -450,6 +453,10 @@ async function apiPost(p, body){
   return data;
 }
 
+function logActivity(activity){
+  apiPost('/api/activity', {activity}).catch(() => {});
+}
+
 api('/api/stats').then(s => {
   $('#stat').textContent =
     `${s.cases} 文献记录 · ${s.visits} 诊次 · ${s.formulas_with_cases} 方剂 · ${s.books} 种书刊`;
@@ -479,9 +486,11 @@ function tab(name){
   });
   document.querySelectorAll('nav button').forEach(b =>
     b.classList.toggle('on', b.dataset.tab === name));
+  logActivity(`tab:${name}`);
 }
 document.querySelectorAll('nav button').forEach(b =>
   b.onclick = () => tab(b.dataset.tab));
+logActivity('page_view');
 
 function filters(){
   return {formula: $('#ff').value.trim(), herb: $('#fh').value.trim(),
@@ -884,6 +893,7 @@ function openFeedback(){
   feedbackModal.classList.add('open');
   document.body.style.overflow = 'hidden';
   $('#feedback-status').textContent = '';
+  logActivity('feedback_opened');
   setTimeout(() => $('#feedback-message').focus(), 0);
 }
 function closeFeedback(){
@@ -894,25 +904,27 @@ function closeFeedback(){
 $('#feedback-trigger').onclick = openFeedback;
 $('#feedback-close').onclick = closeFeedback;
 feedbackModal.onclick = e => { if (e.target === feedbackModal) closeFeedback(); };
-$('#feedback-form').onsubmit = e => {
+$('#feedback-form').onsubmit = async e => {
   e.preventDefault();
   if (!e.currentTarget.reportValidity()) return;
-  const type = $('#feedback-type').value;
-  const contact = $('#feedback-contact').value.trim() || '未提供';
-  const pageTab = document.querySelector('nav button.on')?.textContent.trim() || '未知';
-  const body = [
-    `反馈类型：${type}`,
-    `联系邮箱：${contact}`,
-    `当前页面：${location.href}`,
-    `当前栏目：${pageTab}`,
-    '',
-    '反馈内容：',
-    $('#feedback-message').value.trim()
-  ].join('\n');
-  const subject = encodeURIComponent(`汉方医案检索反馈：${type}`);
-  const mailto = `mailto:zhuoming.li01@gmail.com?subject=${subject}&body=${encodeURIComponent(body)}`;
-  $('#feedback-status').textContent = '正在打开您的邮件应用…';
-  location.href = mailto;
+  const submit = e.currentTarget.querySelector('[type="submit"]');
+  submit.disabled = true;
+  $('#feedback-status').textContent = '正在提交…';
+  try {
+    await apiPost('/api/feedback', {
+      feedback_type: $('#feedback-type').value,
+      contact: $('#feedback-contact').value.trim(),
+      message: $('#feedback-message').value.trim(),
+      page: location.href,
+      tab: document.querySelector('nav button.on')?.textContent.trim() || '未知'
+    });
+    $('#feedback-status').textContent = '已收到，谢谢您的反馈。';
+    e.currentTarget.reset();
+  } catch (error) {
+    $('#feedback-status').textContent = `提交失败：${error.message}`;
+  } finally {
+    submit.disabled = false;
+  }
 };
 document.onkeydown = e => {
   if (e.key !== 'Escape') return;
