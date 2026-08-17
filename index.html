@@ -459,7 +459,10 @@ function logActivity(activity){
 
 function logView(kind, content){
   const detail = typeof content === 'string' ? content : JSON.stringify(content);
-  logActivity(`view:${kind}:content=${detail}`.replace(/\s+/g, ' ').slice(0, 9000));
+  const clean = detail.replace(/\s+/g, ' ');
+  const chunks = clean.match(/[\s\S]{1,7500}/g) || [''];
+  chunks.forEach((chunk, index) =>
+    logActivity(`view:${kind}:part=${index + 1}/${chunks.length}; content=${chunk}`));
 }
 
 function logSearch(q, f, page){
