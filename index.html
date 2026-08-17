@@ -906,8 +906,9 @@ $('#feedback-close').onclick = closeFeedback;
 feedbackModal.onclick = e => { if (e.target === feedbackModal) closeFeedback(); };
 $('#feedback-form').onsubmit = async e => {
   e.preventDefault();
-  if (!e.currentTarget.reportValidity()) return;
-  const submit = e.currentTarget.querySelector('[type="submit"]');
+  const form = e.currentTarget;
+  if (!form.reportValidity()) return;
+  const submit = form.querySelector('[type="submit"]');
   submit.disabled = true;
   $('#feedback-status').textContent = '正在提交…';
   try {
@@ -919,7 +920,7 @@ $('#feedback-form').onsubmit = async e => {
       tab: document.querySelector('nav button.on')?.textContent.trim() || '未知'
     });
     $('#feedback-status').textContent = '已收到，谢谢您的反馈。';
-    e.currentTarget.reset();
+    form.reset();
   } catch (error) {
     $('#feedback-status').textContent = `提交失败：${error.message}`;
   } finally {
